@@ -1,0 +1,123 @@
+
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>課題提出 QR読み取り</title>
+
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 600px;
+      margin: 30px auto;
+      padding: 16px;
+    }
+
+    button {
+      padding: 12px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    #status {
+      margin-top: 18px;
+      overflow-wrap: anywhere;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>課題提出 QR読み取り</h1>
+  <p>「カメラを起動」を押してQRコードを映してください。</p>
+
+  <button id="startButton">カメラを起動</button>
+  <div id="reader" style="width: 100%; margin-top: 16px;"></div>
+  <p id="status">待機中</p>
+
+  <script>
+    // あなたのApps ScriptのウェブアプリURLに置き換えてください
+    const SCRIPT_URL =
+      "https://script.google.com/a/macros/shimotsuma1-h.ibk.ed.jp/s/AKfycbzNBYgpmk_REPRPc71F9wMZGru-ToLSndx3I9HOVZwizlMW23YYzcugFPa8iY1nZPA/exec";
+
+    const status = document.getElementById("status");
+    const startButton = document.getElementById("startButton");
+
+    let scanner = null;
+    let busy = false;
+
+    startButton.addEventListener("click", async () => {
+      if (busy) return;
+
+      if (!window.isSecureContext) {
+        status.textContent =
+          "安全な接続が必要です。HTTPSのページで開いてください。";
+        return;
+      }
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        status.textContent =
+          "このブラウザではカメラを利用できません。";
+        return;
+      }
+
+      busy = true;
+      startButton.disabled = true;
+      status.textContent = "カメラを起動しています...";
+
+      try {
+        scanner = new Html5Qrcode("reader");
+
+        await scanner.start(
+          { facingMode: "environment" },
+          {
+            fps: 10,
+            qrbox: { width: 220, height: 220 }
+          },
+          async (decodedText) => {
+            if (!busy) return;
+
+            busy = false;
+            status.textContent =
+              "読み取り成功。スプレッドシートへ送信中...";
+
+            try {
+              await scanner.stop();
+
+              await fetch(SCRIPT_URL, {
+                method: "POST",
+                mode: "no-cors",
+                headers: {
+                  "Content-Type": "text/plain;charset=UTF-8"
+                },
+                body: decodedText
+              });
+
+              status.textContent =
+                "送信処理を実行しました。スプレッドシートに記録されたか確認してください。";
+            } catch (error) {
+              status.textContent =
+                "送信に失敗しました：" +
+                (error.message || String(error));
+            } finally {
+              startButton.disabled = false;
+            }
+          }
+        );
+
+        status.textContent =
+          "QRコードをカメラに映してください。";
+
+      } catch (error) {
+        busy = false;
+        startButton.disabled = false;
+        status.textContent =
+          "カメラを起動できません：" +
+          (error.message || String(error));
+      }
+    });
+  </script>
+</body>
+</html>
